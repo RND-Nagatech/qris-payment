@@ -11,15 +11,20 @@ export default function Settings() {
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    loadQrisString().then((saved) => {
-      if (saved) {
-        setValue(saved);
-        setSavedValue(saved);
-        setIsEditing(false);
-      } else {
+    loadQrisString()
+      .then((saved) => {
+        if (saved) {
+          setValue(saved);
+          setSavedValue(saved);
+          setIsEditing(false);
+        } else {
+          setIsEditing(true);
+        }
+      })
+      .catch(() => {
         setIsEditing(true);
-      }
-    });
+        Alert.alert("Backend tidak terhubung", "QRIS belum bisa dimuat dari API. Pastikan server berjalan dan URL API benar.");
+      });
   }, []);
 
   const hasSavedQris = Boolean(savedValue);
@@ -56,18 +61,22 @@ export default function Settings() {
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (error) {
-      Alert.alert("QRIS tidak valid", error instanceof Error ? error.message : "Format QRIS tidak dikenali.");
+      Alert.alert("QRIS belum tersimpan", error instanceof Error ? error.message : "Backend API tidak bisa dijangkau.");
     }
   };
 
   const clearSavedQris = async () => {
-    await clearQrisString();
-    setValue("");
-    setSavedValue("");
-    setIsEditing(true);
-    Alert.alert("Dikosongkan", "QRIS tersimpan sudah dihapus. Halaman utama akan memakai mode demo.", [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+    try {
+      await clearQrisString();
+      setValue("");
+      setSavedValue("");
+      setIsEditing(true);
+      Alert.alert("Dikosongkan", "QRIS tersimpan sudah dihapus. Halaman utama akan memakai mode demo.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch {
+      Alert.alert("Gagal menghapus", "Backend API tidak bisa dijangkau. Coba lagi setelah server aktif.");
+    }
   };
 
   return (

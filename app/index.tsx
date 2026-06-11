@@ -36,10 +36,8 @@ export default function Home() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [newAmount, setNewAmount] = useState("");
-  const [feeType, setFeeType] = useState<"none" | "fixed" | "percent">("none");
-  const [feeValue, setFeeValue] = useState("");
-  const [generatedQris, setGeneratedQris] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState<"idle" | "waiting" | "paid">("idle");
+  const [newFeeType, setNewFeeType] = useState<"none" | "fixed" | "percent">("none");
+  const [newFeeValue, setNewFeeValue] = useState("");
   const qrCodeRef = useRef<{ toDataURL: (callback: (data: string) => void) => void } | null>(null);
 
   const activeQris = qris || DEMO_STATIC_QRIS;
@@ -74,19 +72,19 @@ export default function Home() {
     }
   }, [activeQris]);
 
-  const totalAmount = payments.reduce((sum, item) => sum + item.amount, 0);
+  const totalAmount = payments.reduce((sum, item) => sum + item.totalAmount, 0);
 
   const nextDynamicQris = useMemo(() => {
     if (!selectedPayment) return "";
 
     try {
-      const mappedFeeType = feeType === "percent" ? "Persentase" : "Rupiah";
+      const mappedFeeType = selectedPayment.feeType === "percent" ? "Persentase" : "Rupiah";
       const mappedFeeValue =
-        feeType === "none"
+        selectedPayment.feeType === "none"
           ? ""
-          : feeType === "fixed"
-            ? feeValue.replace(/\D/g, "")
-            : feeValue.replace(",", ".");
+          : selectedPayment.feeType === "fixed"
+            ? selectedPayment.feeValue.replace(/\D/g, "")
+            : selectedPayment.feeValue.replace(",", ".");
 
       return generateDynamicQris(
         normalizeQris(activeQris),
@@ -97,18 +95,10 @@ export default function Home() {
     } catch {
       return "";
     }
-  }, [activeQris, feeType, feeValue, selectedPayment]);
-
-  const clearGeneratedResult = () => {
-    setGeneratedQris("");
-    setPaymentStatus("idle");
-  };
+  }, [activeQris, selectedPayment]);
 
   const closeDetail = () => {
     setSelectedPaymentId(null);
-    setFeeType("none");
-    setFeeValue("");
-    clearGeneratedResult();
   };
 
   const addPayment = async () => {
@@ -118,53 +108,55 @@ export default function Home() {
       return;
     }
 
-    const nextItem = await createPayment({
-      note: newNote.trim() || "Pembayaran",
-      amount,
-    });
+    try {
+      const nextItem = await createPayment({
+        note: newNote.trim() || "Pembayaran",
+        amount,
+        feeType: newFeeType,
+        feeValue: newFeeType === "none" ? "" : newFeeValue,
+      });
 
-    setPayments([nextItem, ...payments]);
-    setNewNote("");
-    setNewAmount("");
-    setIsAddOpen(false);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPayments([nextItem, ...payments]);
+      setNewNote("");
+      setNewAmount("");
+      setNewFeeType("none");
+      setNewFeeValue("");
+      setIsAddOpen(false);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Gagal menyimpan", "Backend API tidak bisa dijangkau. Pastikan server berjalan dan URL API benar.");
+    }
   };
 
   const deletePayment = async (id: string) => {
-    await deleteStoredPayment(id);
-    const nextPayments = payments.filter((item) => item.id !== id);
-    setPayments(nextPayments);
-    if (selectedPaymentId === id) closeDetail();
-  };
-
-  const handleGenerateQr = async () => {
-    if (!selectedPayment) return;
-
-    if (!nextDynamicQris) {
-      Alert.alert("QRIS gagal dibuat", "Cek biaya layanan atau QRIS string yang digunakan.");
-      return;
+    try {
+      await deleteStoredPayment(id);
+      const nextPayments = payments.filter((item) => item.id !== id);
+      setPayments(nextPayments);
+      if (selectedPaymentId === id) closeDetail();
+    } catch {
+      Alert.alert("Gagal menghapus", "Backend API tidak bisa dijangkau. Coba lagi setelah server aktif.");
     }
-
-    setGeneratedQris(nextDynamicQris);
-    setPaymentStatus("waiting");
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const simulatePaid = async () => {
     if (!selectedPayment) return;
 
-    await markPaymentPaid(selectedPayment.id);
-    setPayments(payments.filter((item) => item.id !== selectedPayment.id));
-    setPaymentStatus("paid");
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Pembayaran Berhasil", `${selectedPayment.note} senilai ${formatRupiah(selectedPayment.amount)} sudah dibayar.`, [
-      { text: "OK", onPress: closeDetail },
-    ]);
+    try {
+      await markPaymentPaid(selectedPayment.id);
+      setPayments(payments.filter((item) => item.id !== selectedPayment.id));
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Pembayaran Berhasil", `${selectedPayment.note} senilai ${formatRupiah(selectedPayment.totalAmount)} sudah dibayar.`, [
+        { text: "OK", onPress: closeDetail },
+      ]);
+    } catch {
+      Alert.alert("Gagal update pembayaran", "Backend API tidak bisa dijangkau. Status belum diubah.");
+    }
   };
 
   const downloadQr = async () => {
-    if (!generatedQris || !qrCodeRef.current) {
-      Alert.alert("QR belum tersedia", "Generate QR terlebih dahulu.");
+    if (!nextDynamicQris || !qrCodeRef.current) {
+      Alert.alert("QR belum tersedia", "QR belum bisa dibuat untuk pembayaran ini.");
       return;
     }
 
@@ -208,32 +200,18 @@ export default function Home() {
 
       {selectedPayment ? (
         <PaymentDetail
-          feeType={feeType}
-          feeValue={feeValue}
-          generatedQris={generatedQris}
+          generatedQris={nextDynamicQris}
           infoName={info?.merchant ?? "Merchant"}
           payment={selectedPayment}
-          paymentStatus={paymentStatus}
           qrCodeRef={qrCodeRef}
           onBack={closeDetail}
           onCopy={async () => {
-            await Clipboard.setStringAsync(generatedQris);
+            await Clipboard.setStringAsync(nextDynamicQris);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             Alert.alert("Tersalin", "QRIS string tersalin ke clipboard.");
           }}
           onDelete={() => deletePayment(selectedPayment.id)}
           onDownload={downloadQr}
-          onFeeChange={(value) => {
-            setFeeValue(value);
-            clearGeneratedResult();
-          }}
-          onFeeTypeChange={(type) => {
-            setFeeType(type);
-            setFeeValue("");
-            clearGeneratedResult();
-            Haptics.selectionAsync();
-          }}
-          onGenerate={handleGenerateQr}
           onPaid={simulatePaid}
         />
       ) : (
@@ -263,7 +241,6 @@ export default function Home() {
                   style={styles.paymentCard}
                   onPress={() => {
                     setSelectedPaymentId(payment.id);
-                    clearGeneratedResult();
                   }}
                 >
                   <View style={styles.paymentTopRow}>
@@ -276,6 +253,14 @@ export default function Home() {
                   <View style={styles.paymentMetaRow}>
                     <Text style={styles.paymentMetaLabel}>Nominal</Text>
                     <Text style={styles.paymentAmount}>{formatRupiah(payment.amount)}</Text>
+                  </View>
+                  <View style={styles.paymentMetaRow}>
+                    <Text style={styles.paymentMetaLabel}>Service Fee</Text>
+                    <Text style={styles.paymentFee}>{formatFee(payment)}</Text>
+                  </View>
+                  <View style={styles.paymentMetaRow}>
+                    <Text style={styles.paymentMetaLabel}>Total Bayar</Text>
+                    <Text style={styles.paymentTotal}>{formatRupiah(payment.totalAmount)}</Text>
                   </View>
                 </Pressable>
               ))}
@@ -327,10 +312,54 @@ export default function Home() {
             <TextInput
               value={newNote}
               onChangeText={setNewNote}
-              placeholder="Contoh: Tagihan air Juni, DP pesanan, atau bebas"
+              placeholder="Contoh: Penjualan, DP pesanan, atau bebas"
               placeholderTextColor="#94A3B8"
               style={styles.input}
             />
+
+            <Text style={styles.fieldLabel}>Service Fee</Text>
+            <View style={styles.segment}>
+              {(["none", "fixed", "percent"] as const).map((type) => (
+                <Pressable
+                  key={type}
+                  onPress={() => {
+                    setNewFeeType(type);
+                    setNewFeeValue("");
+                    Haptics.selectionAsync();
+                  }}
+                  style={[styles.segItem, newFeeType === type && styles.segItemActive]}
+                >
+                  <Text style={[styles.segText, newFeeType === type && styles.segTextActive]}>
+                    {type === "none" ? "Tidak ada" : type === "fixed" ? "Tetap (Rp)" : "Persen (%)"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {newFeeType !== "none" ? (
+              newFeeType === "fixed" ? (
+                <View style={styles.amountWrap}>
+                  <Text style={styles.rp}>Rp</Text>
+                  <TextInput
+                    value={newFeeValue ? Number(newFeeValue.replace(/\D/g, "")).toLocaleString("id-ID") : ""}
+                    onChangeText={(text) => setNewFeeValue(text.replace(/\D/g, ""))}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.amountInput}
+                  />
+                </View>
+              ) : (
+                <TextInput
+                  value={newFeeValue}
+                  onChangeText={(text) => setNewFeeValue(text.replace(/[^0-9,.]/g, ""))}
+                  keyboardType="decimal-pad"
+                  placeholder="% biaya"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.input}
+                />
+              )
+            ) : null}
 
             <Pressable style={styles.addButton} onPress={addPayment}>
               <Ionicons name="save-outline" size={18} color="#FFFFFF" />
@@ -344,36 +373,24 @@ export default function Home() {
 }
 
 function PaymentDetail({
-  feeType,
-  feeValue,
   generatedQris,
   infoName,
   payment,
-  paymentStatus,
   qrCodeRef,
   onBack,
   onCopy,
   onDelete,
   onDownload,
-  onFeeChange,
-  onFeeTypeChange,
-  onGenerate,
   onPaid,
 }: {
-  feeType: "none" | "fixed" | "percent";
-  feeValue: string;
   generatedQris: string;
   infoName: string;
   payment: PaymentItem;
-  paymentStatus: "idle" | "waiting" | "paid";
   qrCodeRef: MutableRefObject<{ toDataURL: (callback: (data: string) => void) => void } | null>;
   onBack: () => void;
   onCopy: () => void;
   onDelete: () => void;
   onDownload: () => void;
-  onFeeChange: (value: string) => void;
-  onFeeTypeChange: (type: "none" | "fixed" | "percent") => void;
-  onGenerate: () => void;
   onPaid: () => void;
 }) {
   return (
@@ -389,50 +406,14 @@ function PaymentDetail({
         </Pressable>
       </View>
 
-      <View style={styles.paymentCard}>
+      <View style={styles.detailNoteCard}>
         <View style={styles.paymentTopRow}>
-          <Text style={styles.paymentCode}>{payment.id}</Text>
+          <Text style={styles.detailNoteTitle}>{payment.note}</Text>
           <View style={styles.waitingBadge}>
             <Text style={styles.waitingBadgeText}>BELUM BAYAR</Text>
           </View>
         </View>
-        <Text style={styles.paymentTitle}>{payment.note}</Text>
-        <View style={styles.paymentMetaRow}>
-          <Text style={styles.paymentMetaLabel}>Nominal</Text>
-          <Text style={styles.paymentAmount}>{formatRupiah(payment.amount)}</Text>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <SectionTitle icon="swap-horizontal-outline" title="Generate QR Pembayaran" />
-        <Text style={styles.fieldLabel}>Service Fee</Text>
-        <View style={styles.segment}>
-          {(["none", "fixed", "percent"] as const).map((type) => (
-            <Pressable
-              key={type}
-              onPress={() => onFeeTypeChange(type)}
-              style={[styles.segItem, feeType === type && styles.segItemActive]}
-            >
-              <Text style={[styles.segText, feeType === type && styles.segTextActive]}>
-                {type === "none" ? "Tidak ada" : type === "fixed" ? "Tetap (Rp)" : "Persen (%)"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        {feeType !== "none" ? (
-          <TextInput
-            value={feeValue}
-            onChangeText={(text) => onFeeChange(feeType === "fixed" ? text.replace(/\D/g, "") : text.replace(/[^0-9,.]/g, ""))}
-            keyboardType={feeType === "fixed" ? "number-pad" : "decimal-pad"}
-            placeholder={feeType === "fixed" ? "Nominal biaya" : "% biaya"}
-            placeholderTextColor="#94A3B8"
-            style={styles.input}
-          />
-        ) : null}
-        <Pressable style={styles.generateButton} onPress={onGenerate}>
-          <Ionicons name="qr-code-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.generateButtonText}>Generate QR</Text>
-        </Pressable>
+        <Text style={styles.detailNoteSub}>{payment.id}</Text>
       </View>
 
       {generatedQris ? (
@@ -440,7 +421,7 @@ function PaymentDetail({
           <SectionTitle icon="checkmark-circle-outline" title="Dynamic QRIS Result" />
           <View style={styles.statusBar}>
             <Ionicons name="time-outline" size={18} color="#B45309" />
-            <Text style={styles.statusText}>{paymentStatus === "paid" ? "Pembayaran sukses" : "Menunggu pembayaran"}</Text>
+            <Text style={styles.statusText}>Menunggu pembayaran</Text>
           </View>
           <View style={styles.qrBox}>
             <QRCode
@@ -452,7 +433,8 @@ function PaymentDetail({
             />
           </View>
           <Text style={styles.merchantName}>{infoName}</Text>
-          <Text style={styles.amountBig}>{formatRupiah(payment.amount)}</Text>
+          <Text style={styles.amountBig}>{formatRupiah(payment.totalAmount)}</Text>
+          <Text style={styles.amountBreakdown}>{formatPaymentBreakdown(payment)}</Text>
 
           <View style={styles.actionRow}>
             <Pressable style={[styles.secondaryBtn, { flex: 1 }]} onPress={onCopy}>
@@ -472,7 +454,7 @@ function PaymentDetail({
         </View>
       ) : (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Tekan Generate QR untuk menampilkan QR pembayaran ini.</Text>
+          <Text style={styles.emptyText}>QR belum bisa dibuat. Cek QRIS string di pengaturan.</Text>
         </View>
       )}
     </>
@@ -486,6 +468,26 @@ function SectionTitle({ icon, title }: { icon: keyof typeof Ionicons.glyphMap; t
       <Text style={styles.cardTitle}>{title}</Text>
     </View>
   );
+}
+
+function formatFee(payment: PaymentItem): string {
+  if (payment.feeType === "fixed") {
+    return payment.feeAmount > 0 ? formatRupiah(payment.feeAmount) : "Tidak ada";
+  }
+
+  if (payment.feeType === "percent") {
+    return payment.feeAmount > 0 ? `${payment.feeValue.replace(".", ",")}% / ${formatRupiah(payment.feeAmount)}` : "Tidak ada";
+  }
+
+  return "Tidak ada";
+}
+
+function formatPaymentBreakdown(payment: PaymentItem): string {
+  if (payment.feeAmount <= 0) {
+    return `Nominal ${formatRupiah(payment.amount)}`;
+  }
+
+  return `Nominal ${formatRupiah(payment.amount)} + Fee ${formatRupiah(payment.feeAmount)}`;
 }
 
 const styles = StyleSheet.create({
@@ -544,6 +546,17 @@ const styles = StyleSheet.create({
   paymentMetaRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
   paymentMetaLabel: { color: "#64748B", fontSize: 13, fontWeight: "700" },
   paymentAmount: { color: "#2563EB", fontSize: 22, fontWeight: "900" },
+  paymentFee: { color: "#0F172A", fontSize: 14, fontWeight: "800" },
+  paymentTotal: { color: "#059669", fontSize: 20, fontWeight: "900" },
+  detailNoteCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 14,
+  },
+  detailNoteTitle: { color: "#0F172A", flex: 1, fontSize: 17, fontWeight: "800" },
+  detailNoteSub: { color: "#64748B", fontSize: 12, fontWeight: "700", marginTop: 4 },
   emptyCard: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
@@ -654,6 +667,7 @@ const styles = StyleSheet.create({
   qrBox: { backgroundColor: "#FFFFFF", borderColor: "#EEF2F7", borderRadius: 8, borderWidth: 1, marginTop: 22, padding: 12 },
   merchantName: { color: "#475569", fontSize: 14, fontWeight: "600", marginTop: 14 },
   amountBig: { color: "#2563EB", fontSize: 26, fontWeight: "800", marginTop: 4 },
+  amountBreakdown: { color: "#64748B", fontSize: 12, fontWeight: "700", marginTop: 4, textAlign: "center" },
   actionRow: { flexDirection: "row", gap: 10, marginTop: 16, paddingHorizontal: 12 },
   primaryBtn: {
     alignItems: "center",

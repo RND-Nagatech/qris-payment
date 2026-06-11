@@ -7,6 +7,10 @@ type PaymentDocument = {
   id: string;
   note: string;
   amount: number;
+  feeType: "none" | "fixed" | "percent";
+  feeValue: string;
+  feeAmount: number;
+  totalAmount: number;
   status: "pending" | "paid";
   createdAt: string;
   paidAt?: string;
@@ -34,6 +38,20 @@ app.use(express.json({ limit: "1mb" }));
 async function getDb() {
   await client.connect();
   return client.db();
+}
+
+function calculateFeeAmount(amount: number, feeType: PaymentDocument["feeType"], feeValue: string): number {
+  if (feeType === "fixed") {
+    return Math.max(0, Math.floor(Number(feeValue.replace(/\D/g, "")) || 0));
+  }
+
+  if (feeType === "percent") {
+    const percent = Number(feeValue.replace(",", "."));
+    if (!Number.isFinite(percent) || percent <= 0) return 0;
+    return Math.floor((amount * percent) / 100);
+  }
+
+  return 0;
 }
 
 app.get("/health", async (_req, res, next) => {
@@ -93,7 +111,7 @@ app.get("/api/payments", async (_req, res, next) => {
       .collection<PaymentDocument>("payments")
       .find({ status: "pending" })
       .sort({ createdAt: -1 })
-      .project({ _id: 0, id: 1, note: 1, amount: 1, createdAt: 1 })
+      .project({ _id: 0, id: 1, note: 1, amount: 1, feeType: 1, feeValue: 1, feeAmount: 1, totalAmount: 1, createdAt: 1 })
       .toArray();
 
     res.json({ payments });
@@ -106,15 +124,22 @@ app.post("/api/payments", async (req, res, next) => {
   try {
     const amount = Number(req.body?.amount);
     const note = String(req.body?.note ?? "").trim() || "Pembayaran";
+    const feeType = ["none", "fixed", "percent"].includes(req.body?.feeType) ? req.body.feeType : "none";
+    const feeValue = feeType === "none" ? "" : String(req.body?.feeValue ?? "").trim();
     if (!Number.isFinite(amount) || amount <= 0) {
       res.status(400).json({ message: "Valid amount is required." });
       return;
     }
 
+    const feeAmount = calculateFeeAmount(amount, feeType, feeValue);
     const payment: PaymentDocument = {
       id: `PAY-${Date.now()}`,
       note,
       amount,
+      feeType,
+      feeValue,
+      feeAmount,
+      totalAmount: amount + feeAmount,
       status: "pending",
       createdAt: new Date().toISOString(),
     };
@@ -126,6 +151,10 @@ app.post("/api/payments", async (req, res, next) => {
         id: payment.id,
         note: payment.note,
         amount: payment.amount,
+        feeType: payment.feeType,
+        feeValue: payment.feeValue,
+        feeAmount: payment.feeAmount,
+        totalAmount: payment.totalAmount,
         createdAt: payment.createdAt,
       },
     });
