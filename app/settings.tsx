@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { clearQrisString, loadQrisString, saveQrisString } from "../lib/dataStore";
 import { getMerchantInfo, normalizeQris, validateQris } from "../lib/qris";
 
@@ -57,9 +56,7 @@ export default function Settings() {
       setSavedValue(nextValue);
       setValue(nextValue);
       setIsEditing(false);
-      Alert.alert("Tersimpan", "QRIS string berhasil disimpan.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      Alert.alert("Tersimpan", "QRIS string berhasil disimpan.");
     } catch (error) {
       Alert.alert("QRIS belum tersimpan", error instanceof Error ? error.message : "Backend API tidak bisa dijangkau.");
     }
@@ -71,9 +68,7 @@ export default function Settings() {
       setValue("");
       setSavedValue("");
       setIsEditing(true);
-      Alert.alert("Dikosongkan", "QRIS tersimpan sudah dihapus. Halaman utama akan memakai mode demo.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      Alert.alert("Dikosongkan", "QRIS tersimpan sudah dihapus. Halaman utama akan memakai mode demo.");
     } catch {
       Alert.alert("Gagal menghapus", "Backend API tidak bisa dijangkau. Coba lagi setelah server aktif.");
     }
