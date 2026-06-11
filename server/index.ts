@@ -54,6 +54,22 @@ function calculateFeeAmount(amount: number, feeType: PaymentDocument["feeType"],
   return 0;
 }
 
+function jakartaDateKey(isoDate?: string): string {
+  if (!isoDate) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(isoDate));
+}
+
+function isTodayJakarta(payment: PaymentDocument): boolean {
+  const today = jakartaDateKey(new Date().toISOString());
+  const relevantDate = payment.status === "paid" ? payment.paidAt : payment.createdAt;
+  return jakartaDateKey(relevantDate) === today;
+}
+
 app.get("/health", async (_req, res, next) => {
   try {
     const db = await getDb();
@@ -111,10 +127,29 @@ app.get("/api/payments", async (_req, res, next) => {
       .collection<PaymentDocument>("payments")
       .find({ status: "pending" })
       .sort({ createdAt: -1 })
-      .project({ _id: 0, id: 1, note: 1, amount: 1, feeType: 1, feeValue: 1, feeAmount: 1, totalAmount: 1, createdAt: 1 })
+      .project({ _id: 0, id: 1, note: 1, amount: 1, feeType: 1, feeValue: 1, feeAmount: 1, totalAmount: 1, status: 1, createdAt: 1, paidAt: 1 })
       .toArray();
 
     res.json({ payments });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/payments/history/today", async (_req, res, next) => {
+  try {
+    const db = await getDb();
+    const payments = await db
+      .collection<PaymentDocument>("payments")
+      .find({})
+      .project({ _id: 0, id: 1, note: 1, amount: 1, feeType: 1, feeValue: 1, feeAmount: 1, totalAmount: 1, status: 1, createdAt: 1, paidAt: 1 })
+      .toArray() as PaymentDocument[];
+
+    res.json({
+      payments: payments
+        .filter((payment) => isTodayJakarta(payment))
+        .sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime()),
+    });
   } catch (error) {
     next(error);
   }
@@ -155,6 +190,7 @@ app.post("/api/payments", async (req, res, next) => {
         feeValue: payment.feeValue,
         feeAmount: payment.feeAmount,
         totalAmount: payment.totalAmount,
+        status: payment.status,
         createdAt: payment.createdAt,
       },
     });

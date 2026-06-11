@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -17,7 +17,7 @@ import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as Sharing from "expo-sharing";
-import { Link, useFocusEffect } from "expo-router";
+import { useFocusEffect, useNavigation } from "expo-router";
 import {
   createPayment,
   deletePayment as deleteStoredPayment,
@@ -30,6 +30,7 @@ import { formatRupiah, getMerchantInfo, normalizeQris } from "../lib/qris";
 import { DEMO_STATIC_QRIS, generateDynamicQris } from "../contohqris";
 
 export default function Home() {
+  const navigation = useNavigation();
   const [qris, setQris] = useState("");
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
@@ -43,6 +44,20 @@ export default function Home() {
   const activeQris = qris || DEMO_STATIC_QRIS;
   const isDemoMode = !qris;
   const selectedPayment = payments.find((item) => item.id === selectedPaymentId) ?? null;
+
+  useEffect(() => {
+    navigation.setOptions({
+      tabBarStyle: selectedPayment
+        ? { display: "none" }
+        : {
+            backgroundColor: "#FFFFFF",
+            borderTopColor: "#E5E7EB",
+            height: 72,
+            paddingBottom: 10,
+            paddingTop: 8,
+          },
+    });
+  }, [navigation, selectedPayment]);
 
   useFocusEffect(
     useCallback(() => {
@@ -273,12 +288,6 @@ export default function Home() {
             </View>
           )}
 
-          <Link href="/settings" asChild>
-            <Pressable style={styles.ghostBtn}>
-              <Ionicons name="settings-outline" size={16} color="#2563EB" />
-              <Text style={styles.ghostBtnText}>{isDemoMode ? "Simpan QRIS Asli" : "Pengaturan QRIS"}</Text>
-            </Pressable>
-          </Link>
         </>
       )}
 
@@ -397,7 +406,7 @@ function PaymentDetail({
     <>
       <View style={styles.detailHeader}>
         <Pressable style={styles.backButton} onPress={onBack}>
-          <Ionicons name="chevron-back" size={18} color="#2563EB" />
+          <Ionicons name="chevron-back" size={18} color="#059669" />
           <Text style={styles.backButtonText}>Daftar</Text>
         </Pressable>
         <Pressable style={styles.deleteButton} onPress={onDelete}>
@@ -418,7 +427,6 @@ function PaymentDetail({
 
       {generatedQris ? (
         <View style={[styles.card, styles.qrCard]}>
-          <SectionTitle icon="checkmark-circle-outline" title="Dynamic QRIS Result" />
           <View style={styles.statusBar}>
             <Ionicons name="time-outline" size={18} color="#B45309" />
             <Text style={styles.statusText}>Menunggu pembayaran</Text>
@@ -436,21 +444,21 @@ function PaymentDetail({
           <Text style={styles.amountBig}>{formatRupiah(payment.totalAmount)}</Text>
           <Text style={styles.amountBreakdown}>{formatPaymentBreakdown(payment)}</Text>
 
-          <View style={styles.actionRow}>
-            <Pressable style={[styles.secondaryBtn, { flex: 1 }]} onPress={onCopy}>
-              <Ionicons name="copy-outline" size={15} color="#0F172A" />
-              <Text style={styles.secondaryBtnText}>Salin String</Text>
+          <Pressable style={styles.downloadButton} onPress={onDownload}>
+            <Ionicons name="download-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.downloadButtonText}>Download QR</Text>
+          </Pressable>
+
+          <View style={styles.secondaryActionRow}>
+            <Pressable style={styles.pillActionButton} onPress={onCopy}>
+              <Ionicons name="copy-outline" size={18} color="#0F172A" />
+              <Text style={styles.pillActionText}>Salin String</Text>
             </Pressable>
-            <Pressable style={[styles.primaryBtn, { flex: 1 }]} onPress={onDownload}>
-              <Ionicons name="download-outline" size={15} color="#FFFFFF" />
-              <Text style={styles.primaryBtnText}>Download QR</Text>
+            <Pressable style={styles.pillActionButton} onPress={onPaid}>
+              <Ionicons name="checkmark" size={19} color="#0F172A" />
+              <Text style={styles.pillActionText}>Simulasi Bayar</Text>
             </Pressable>
           </View>
-
-          <Pressable style={[styles.successButton, styles.fullWidthButton]} onPress={onPaid}>
-            <Ionicons name="cash-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.successButtonText}>Simulasikan Sudah Dibayar</Text>
-          </Pressable>
         </View>
       ) : (
         <View style={styles.emptyCard}>
@@ -458,15 +466,6 @@ function PaymentDetail({
         </View>
       )}
     </>
-  );
-}
-
-function SectionTitle({ icon, title }: { icon: keyof typeof Ionicons.glyphMap; title: string }) {
-  return (
-    <View style={styles.sectionTitle}>
-      <Ionicons name={icon} size={16} color="#2563EB" />
-      <Text style={styles.cardTitle}>{title}</Text>
-    </View>
   );
 }
 
@@ -491,12 +490,12 @@ function formatPaymentBreakdown(payment: PaymentItem): string {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 12, gap: 14, paddingBottom: 40 },
+  container: { backgroundColor: "#F7FAF9", padding: 14, gap: 14, paddingBottom: 40 },
   demoBox: {
     alignItems: "flex-start",
     backgroundColor: "#FFFBEB",
     borderColor: "#FDE68A",
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
@@ -508,60 +507,80 @@ const styles = StyleSheet.create({
   summaryCard: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderColor: "#E6EEF0",
+    borderRadius: 22,
     borderWidth: 1,
     flexDirection: "row",
     minHeight: 94,
     padding: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
   },
   summaryBlock: { flex: 1 },
-  summaryDivider: { backgroundColor: "#E2E8F0", height: 54, marginHorizontal: 14, width: 1 },
+  summaryDivider: { backgroundColor: "#E6EEF0", height: 54, marginHorizontal: 14, width: 1 },
   summaryLabel: { color: "#64748B", fontSize: 11, fontWeight: "800" },
-  summaryValue: { color: "#2563EB", fontSize: 30, fontWeight: "800", marginTop: 8 },
+  summaryValue: { color: "#0F766E", fontSize: 30, fontWeight: "800", marginTop: 8 },
   summaryAmount: { color: "#059669", fontSize: 19, fontWeight: "800", marginTop: 8 },
   addButton: {
     alignItems: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 8,
+    backgroundColor: "#059669",
+    borderRadius: 16,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
     minHeight: 48,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 2,
   },
   addButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   paymentList: { gap: 12 },
   paymentCard: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderColor: "#E6EEF0",
+    borderRadius: 20,
     borderWidth: 1,
     padding: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 13,
+    elevation: 2,
   },
   paymentTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  paymentCode: { color: "#0F172A", flex: 1, fontSize: 18, fontWeight: "800" },
+  paymentCode: { color: "#64748B", flex: 1, fontSize: 12, fontWeight: "700", letterSpacing: 0.2 },
   waitingBadge: { backgroundColor: "#FEF3C7", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   waitingBadgeText: { color: "#92400E", fontSize: 10, fontWeight: "900" },
-  paymentTitle: { color: "#475569", fontSize: 15, fontWeight: "700", marginBottom: 16 },
+  paymentTitle: { color: "#0F172A", fontSize: 17, fontWeight: "800", marginBottom: 16 },
   paymentMetaRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
   paymentMetaLabel: { color: "#64748B", fontSize: 13, fontWeight: "700" },
-  paymentAmount: { color: "#2563EB", fontSize: 22, fontWeight: "900" },
+  paymentAmount: { color: "#D97706", fontSize: 18, fontWeight: "800" },
   paymentFee: { color: "#0F172A", fontSize: 14, fontWeight: "800" },
-  paymentTotal: { color: "#059669", fontSize: 20, fontWeight: "900" },
+  paymentTotal: { color: "#059669", fontSize: 20, fontWeight: "800" },
   detailNoteCard: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderColor: "#E6EEF0",
+    borderRadius: 18,
     borderWidth: 1,
     padding: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   detailNoteTitle: { color: "#0F172A", flex: 1, fontSize: 17, fontWeight: "800" },
   detailNoteSub: { color: "#64748B", fontSize: 12, fontWeight: "700", marginTop: 4 },
   emptyCard: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderColor: "#E6EEF0",
+    borderRadius: 18,
     borderWidth: 1,
     gap: 8,
     padding: 18,
@@ -570,12 +589,12 @@ const styles = StyleSheet.create({
   emptyText: { color: "#64748B", fontSize: 13, lineHeight: 18, textAlign: "center" },
   detailHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   backButton: { alignItems: "center", flexDirection: "row", gap: 4, paddingVertical: 8 },
-  backButtonText: { color: "#2563EB", fontSize: 14, fontWeight: "800" },
+  backButtonText: { color: "#059669", fontSize: 14, fontWeight: "800" },
   deleteButton: {
     alignItems: "center",
     backgroundColor: "#FEF2F2",
     borderColor: "#FECACA",
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     flexDirection: "row",
     gap: 6,
@@ -585,26 +604,21 @@ const styles = StyleSheet.create({
   deleteButtonText: { color: "#B91C1C", fontSize: 12, fontWeight: "800" },
   card: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderColor: "#E6EEF0",
+    borderRadius: 22,
     borderWidth: 1,
     overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 2,
   },
-  sectionTitle: {
-    alignItems: "center",
-    borderBottomColor: "#E2E8F0",
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    gap: 8,
-    padding: 12,
-    width: "100%",
-  },
-  cardTitle: { color: "#0F172A", fontSize: 13, fontWeight: "700" },
   fieldLabel: { color: "#334155", fontSize: 12, fontWeight: "700", marginBottom: 6, marginHorizontal: 12, marginTop: 14 },
   amountWrap: {
     alignItems: "center",
     borderColor: "#CBD5E1",
-    borderRadius: 6,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     height: 46,
@@ -615,7 +629,7 @@ const styles = StyleSheet.create({
   amountInput: { color: "#0F172A", flex: 1, fontSize: 14, fontWeight: "700" },
   input: {
     borderColor: "#CBD5E1",
-    borderRadius: 6,
+    borderRadius: 12,
     borderWidth: 1,
     color: "#0F172A",
     fontSize: 14,
@@ -628,19 +642,19 @@ const styles = StyleSheet.create({
   segItem: {
     alignItems: "center",
     borderColor: "#CBD5E1",
-    borderRadius: 6,
+    borderRadius: 12,
     borderWidth: 1,
     flex: 1,
     justifyContent: "center",
     minHeight: 42,
   },
-  segItemActive: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
+  segItemActive: { backgroundColor: "#ECFDF5", borderColor: "#059669" },
   segText: { color: "#64748B", fontSize: 13, fontWeight: "600" },
-  segTextActive: { color: "#2563EB" },
+  segTextActive: { color: "#047857" },
   generateButton: {
     alignItems: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 8,
+    backgroundColor: "#059669",
+    borderRadius: 14,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
@@ -648,63 +662,64 @@ const styles = StyleSheet.create({
     minHeight: 46,
   },
   generateButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
-  qrCard: { alignItems: "center", paddingBottom: 12 },
+  qrCard: { alignItems: "center", paddingBottom: 16, paddingTop: 14 },
   statusBar: {
     alignItems: "center",
     alignSelf: "stretch",
     backgroundColor: "#FFFBEB",
     borderColor: "#FDE68A",
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     marginHorizontal: 12,
-    marginTop: 12,
     minHeight: 42,
     paddingHorizontal: 12,
   },
   statusText: { color: "#B45309", fontSize: 13, fontWeight: "800" },
-  qrBox: { backgroundColor: "#FFFFFF", borderColor: "#EEF2F7", borderRadius: 8, borderWidth: 1, marginTop: 22, padding: 12 },
+  qrBox: { backgroundColor: "#FFFFFF", borderColor: "#E6EEF0", borderRadius: 20, borderWidth: 1, marginTop: 22, padding: 14 },
   merchantName: { color: "#475569", fontSize: 14, fontWeight: "600", marginTop: 14 },
-  amountBig: { color: "#2563EB", fontSize: 26, fontWeight: "800", marginTop: 4 },
+  amountBig: { color: "#059669", fontSize: 28, fontWeight: "800", marginTop: 4 },
   amountBreakdown: { color: "#64748B", fontSize: 12, fontWeight: "700", marginTop: 4, textAlign: "center" },
-  actionRow: { flexDirection: "row", gap: 10, marginTop: 16, paddingHorizontal: 12 },
-  primaryBtn: {
+  downloadButton: {
     alignItems: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 8,
-    flexDirection: "row",
-    gap: 8,
-    justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 14,
-  },
-  primaryBtnText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
-  secondaryBtn: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 8,
-    justifyContent: "center",
-    minHeight: 46,
-  },
-  secondaryBtnText: { color: "#0F172A", fontSize: 15, fontWeight: "700" },
-  successButton: {
-    alignItems: "center",
+    alignSelf: "stretch",
     backgroundColor: "#059669",
-    borderRadius: 8,
+    borderRadius: 999,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
-    minHeight: 46,
+    marginHorizontal: 12,
+    marginTop: 18,
+    minHeight: 58,
+    paddingHorizontal: 14,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 2,
   },
-  successButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
-  fullWidthButton: { alignSelf: "stretch", marginHorizontal: 12, marginTop: 10 },
-  ghostBtn: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center", paddingVertical: 14 },
-  ghostBtnText: { color: "#2563EB", fontWeight: "600" },
+  downloadButtonText: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
+  secondaryActionRow: {
+    alignSelf: "stretch",
+    flexDirection: "row",
+    gap: 12,
+    marginHorizontal: 12,
+    marginTop: 12,
+  },
+  pillActionButton: {
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderColor: "#E2E8F0",
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 52,
+  },
+  pillActionText: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
   modalBackdrop: {
     alignItems: "center",
     backgroundColor: "rgba(15, 23, 42, 0.48)",
@@ -714,7 +729,7 @@ const styles = StyleSheet.create({
   },
   modalDialog: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 20,
     gap: 8,
     maxWidth: 520,
     padding: 16,
@@ -725,7 +740,7 @@ const styles = StyleSheet.create({
   iconButton: {
     alignItems: "center",
     borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     height: 34,
     justifyContent: "center",

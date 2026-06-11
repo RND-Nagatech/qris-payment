@@ -12,7 +12,9 @@ export type PaymentItem = {
   feeValue: string;
   feeAmount: number;
   totalAmount: number;
+  status: "pending" | "paid";
   createdAt: string;
+  paidAt?: string;
 };
 
 type StoredPaymentItem = Partial<PaymentItem> & {
@@ -57,8 +59,21 @@ function normalizeStoredPayment(item: StoredPaymentItem): PaymentItem {
     feeValue,
     feeAmount,
     totalAmount: item.totalAmount ?? item.amount + feeAmount,
+    status: item.status ?? "pending",
     createdAt: item.createdAt,
+    paidAt: item.paidAt,
   };
+}
+
+async function loadAllLocalPayments(): Promise<PaymentItem[]> {
+  const savedPayments = await AsyncStorage.getItem(PAYMENTS_STORAGE_KEY);
+  const parsed = savedPayments ? (JSON.parse(savedPayments) as StoredPaymentItem[]) : [];
+  return parsed.map(normalizeStoredPayment);
+}
+
+function isTodayLocal(isoDate?: string): boolean {
+  if (!isoDate) return false;
+  return new Date(isoDate).toDateString() === new Date().toDateString();
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -123,9 +138,18 @@ export async function loadPayments(): Promise<PaymentItem[]> {
     return data.payments.map(normalizeStoredPayment);
   }
 
-  const savedPayments = await AsyncStorage.getItem(PAYMENTS_STORAGE_KEY);
-  const parsed = savedPayments ? (JSON.parse(savedPayments) as StoredPaymentItem[]) : [];
-  return parsed.map(normalizeStoredPayment);
+  return (await loadAllLocalPayments()).filter((item) => item.status === "pending");
+}
+
+export async function loadTodayHistory(): Promise<PaymentItem[]> {
+  if (API_URL) {
+    const data = await apiRequest<{ payments: PaymentItem[] }>("/api/payments/history/today");
+    return data.payments.map(normalizeStoredPayment);
+  }
+
+  return (await loadAllLocalPayments())
+    .filter((item) => isTodayLocal(item.status === "paid" ? item.paidAt : item.createdAt))
+    .sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime());
 }
 
 export async function createPayment(payload: PaymentPayload): Promise<PaymentItem> {
@@ -137,7 +161,7 @@ export async function createPayment(payload: PaymentPayload): Promise<PaymentIte
     return normalizeStoredPayment(data.payment);
   }
 
-  const payments = await loadPayments();
+  const payments = await loadAllLocalPayments();
   const feeAmount = calculateFeeAmount(payload.amount, payload.feeType, payload.feeValue);
   const payment: PaymentItem = {
     id: `PAY-${Date.now()}`,
@@ -147,6 +171,7 @@ export async function createPayment(payload: PaymentPayload): Promise<PaymentIte
     feeValue: payload.feeType === "none" ? "" : payload.feeValue,
     feeAmount,
     totalAmount: payload.amount + feeAmount,
+    status: "pending",
     createdAt: new Date().toISOString(),
   };
   await AsyncStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify([payment, ...payments]));
@@ -159,7 +184,7 @@ export async function deletePayment(id: string): Promise<void> {
     return;
   }
 
-  const payments = await loadPayments();
+  const payments = await loadAllLocalPayments();
   await AsyncStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(payments.filter((item) => item.id !== id)));
 }
 
@@ -169,5 +194,9 @@ export async function markPaymentPaid(id: string): Promise<void> {
     return;
   }
 
-  await deletePayment(id);
+  const payments = await loadAllLocalPayments();
+  const nextPayments = payments.map((item) => (
+    item.id === id ? { ...item, status: "paid" as const, paidAt: new Date().toISOString() } : item
+  ));
+  await AsyncStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(nextPayments));
 }

@@ -94,7 +94,7 @@ export default function Settings() {
       {preview ? (
         <View style={styles.panel}>
           <View style={styles.titleRow}>
-            <Ionicons name="information-circle-outline" size={18} color="#2563EB" />
+            <Ionicons name="information-circle-outline" size={18} color="#059669" />
             <Text style={styles.title}>Preview Merchant</Text>
           </View>
           <InfoRow label="Merchant" value={preview.merchant || "-"} />
@@ -111,7 +111,7 @@ export default function Settings() {
         <>
           <View style={styles.panel}>
             <View style={styles.titleRow}>
-              <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
+              <Ionicons name="qr-code-outline" size={18} color="#059669" />
               <Text style={styles.title}>{hasSavedQris ? "Edit QRIS String" : "QRIS String Statis"}</Text>
             </View>
             <TextInput
@@ -170,22 +170,28 @@ function InfoRow({ label, value, last }: { label: string; value: string; last?: 
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    backgroundColor: "#F7FAF9",
+    padding: 14,
     gap: 14,
     paddingBottom: 32,
   },
   panel: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderColor: "#E6EEF0",
+    borderRadius: 18,
     borderWidth: 1,
     overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 13,
+    elevation: 2,
   },
   savedBanner: {
     alignItems: "flex-start",
     backgroundColor: "#ECFDF5",
     borderColor: "#A7F3D0",
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
@@ -252,12 +258,17 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 8,
+    backgroundColor: "#059669",
+    borderRadius: 16,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
     minHeight: 52,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 2,
   },
   primaryButtonText: {
     color: "#FFFFFF",
@@ -268,7 +279,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderColor: "#CBD5E1",
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
@@ -284,7 +295,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FEF2F2",
     borderColor: "#FECACA",
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
