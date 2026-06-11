@@ -47,6 +47,7 @@ export default function Home() {
 
   useEffect(() => {
     navigation.setOptions({
+      headerShown: !selectedPayment,
       tabBarStyle: selectedPayment
         ? { display: "none" }
         : {
@@ -202,7 +203,7 @@ export default function Home() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[styles.container, selectedPayment && styles.detailContainer]} keyboardShouldPersistTaps="handled">
       {isDemoMode ? (
         <View style={styles.demoBox}>
           <Ionicons name="flask-outline" size={18} color="#B45309" />
@@ -491,6 +492,7 @@ function formatPaymentBreakdown(payment: PaymentItem): string {
 
 const styles = StyleSheet.create({
   container: { backgroundColor: "#F7FAF9", padding: 14, gap: 14, paddingBottom: 40 },
+  detailContainer: { paddingTop: Platform.OS === "ios" ? 54 : 34 },
   demoBox: {
     alignItems: "flex-start",
     backgroundColor: "#FFFBEB",
